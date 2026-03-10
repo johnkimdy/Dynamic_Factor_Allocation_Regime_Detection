@@ -109,8 +109,20 @@ print("Max Drawdown: {:.2%}".format(results['max_drawdown']))
 ### Comprehensive Analysis
 ```bash
 # Run full analysis across multiple periods
-python3.11 analyze_strategy.py
+python analyze_strategy.py
 ```
+
+### Hyperparameter Tuning (with W&B)
+```bash
+# Install W&B
+pip install wandb
+
+# Run tuning; logs to Weights & Biases (login prompt on first run)
+python tune_sjm_hyperparameters.py
+```
+- **Horizons** (per paper Exhibit 1): data 1993–2024, test 2007–2024
+- **W&B**: Logs config, per-combo metrics, best params, and `sjm_hyperparameters.csv` as artifact
+- **Disable W&B**: `WANDB_MODE=disabled python tune_sjm_hyperparameters.py`
 
 ## Theoretical Foundation
 

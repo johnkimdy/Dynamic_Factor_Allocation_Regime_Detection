@@ -1,14 +1,13 @@
 """
 Helix 1.1: Factor-Based Portfolio Optimization Strategy
 
-A lightweight daily portfolio rebalancing strategy using Sparse Jump Models
-for regime identification across factor ETFs, inspired by the paper:
-"Portfolio Allocation Using Sparse Jump Model" (arXiv:2410.14841v1)
+Dynamic factor allocation using Sparse Jump Models for regime identification,
+aligned with Princeton paper: "Dynamic Factor Allocation Leveraging Regime-Switching
+Signals" (arXiv:2410.14841v1).
 """
 
 import numpy as np
 import pandas as pd
-# from typing import Dict, List, Tuple, Optional  # Removed for Python compatibility
 import yfinance as yf
 from datetime import datetime, timedelta
 import warnings
@@ -18,28 +17,73 @@ from sklearn.preprocessing import StandardScaler
 from scipy.optimize import minimize
 import logging
 
-# Configure logging
+try:
+    from data.market_data import fetch_market_data, FACTOR_ETFS, MARKET_ETF
+except ImportError:
+    import sys
+    import os
+    _root = os.path.dirname(os.path.abspath(__file__))
+    if _root not in sys.path:
+        sys.path.insert(0, _root)
+    from data.market_data import fetch_market_data, FACTOR_ETFS, MARKET_ETF
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-import numpy as np
-import pandas as pd
-from sklearn.preprocessing import StandardScaler
-from scipy.optimize import minimize
-import logging
+# Paper defaults (Phase 3)
+DEFAULT_JUMP_PENALTY = 50.0   # λ
+DEFAULT_SPARSITY_PARAM = 9.5  # κ²
+EXPECTED_RETURN_CAP = 0.05    # ±5% p.a. (Phase 4)
+COV_HALFLIFE = 126            # EWMA halflife days (Phase 5)
+RISK_AVERSION = 2.5           # δ per paper (Phase 5)
+TXN_COST_BPS = 5.0            # 5 bps per side (Phase 5)
 
-logger = logging.getLogger(__name__)
+
+def compute_active_returns(returns, market_col='SPY'):
+    """
+    Compute factor active returns = factor return - market return.
+    Returns DataFrame with 6 factor columns (excludes market).
+    """
+    if market_col not in returns.columns:
+        raise ValueError("Market column '%s' not in returns" % market_col)
+    market_ret = returns[market_col]
+    active = pd.DataFrame(index=returns.index)
+    for col in returns.columns:
+        if col != market_col:
+            active[col] = returns[col] - market_ret
+    return active
+
+
+def _rsi(series, window):
+    delta = series.diff()
+    gain = delta.where(delta > 0, 0).rolling(window).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window).mean()
+    rs = gain / (loss + 1e-12)
+    return (100 - (100 / (1 + rs))).fillna(50).values
+
+
+def _stoch_k(series, window):
+    low = series.rolling(window).min()
+    high = series.rolling(window).max()
+    return (100 * (series - low) / (high - low + 1e-10)).values
+
+
+def _macd(series, fast, slow):
+    ema_fast = series.ewm(span=fast, adjust=False).mean()
+    ema_slow = series.ewm(span=slow, adjust=False).mean()
+    return (ema_fast - ema_slow).values
+
 
 class SparseJumpModel:
     """
-    Proper Sparse Jump Model implementation following the paper's methodology
+    Sparse Jump Model per Princeton paper. Uses ~20 features (Exhibit 3).
     """
     
-    def __init__(self, n_regimes=2, jump_penalty=0.1, sparsity_param=1.0, max_iter=100, tol=1e-6):
+    def __init__(self, n_regimes=2, jump_penalty=None, sparsity_param=None, max_iter=100, tol=1e-6):
         self.n_regimes = n_regimes
-        self.jump_penalty = jump_penalty  # γ in the paper
-        self.sparsity_param = sparsity_param  # L1 constraint parameter
+        self.jump_penalty = jump_penalty if jump_penalty is not None else DEFAULT_JUMP_PENALTY
+        self.sparsity_param = sparsity_param if sparsity_param is not None else DEFAULT_SPARSITY_PARAM
         self.max_iter = max_iter
         self.tol = tol
         
@@ -49,36 +93,74 @@ class SparseJumpModel:
         self.regimes_ = None
         self.converged_ = False
         
-    def _calculate_features(self, returns, window=20):
-        """Calculate technical features for regime identification"""
-        features = []
-        
-        # EWMA returns
-        ewma = returns.ewm(span=window).mean()
-        features.append(ewma.values)
-        
-        # RSI-like momentum indicator
-        delta = returns.diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-        rs = gain / loss
-        rsi = 100 - (100 / (1 + rs))
-        features.append(rsi.values)
-        
-        # Price momentum
-        momentum = returns.rolling(window=window).sum()
-        features.append(momentum.values)
-        
-        # Volatility
-        volatility = returns.rolling(window=window).std()
-        features.append(volatility.values)
-        
-        return np.column_stack(features)
+    def _calculate_features(self, active_return, market_data, factor_name, market_returns):
+        """
+        ~20 features per paper Exhibit 3.
+        Factor-specific: EWMA(8,21,63), RSI(8,21,63), %K(8,21,63), MACD(8,21),(21,63), DD(21), active beta(21).
+        Market-environment: market EWMA(21), VIX(log,diff,EWMA21), 2Y diff EWMA21, 10Y-2Y slope diff EWMA21.
+        """
+        idx = active_return.index
+        ar = active_return.reindex(market_data.index).ffill().bfill()
+        mr = market_returns.reindex(market_data.index).ffill().bfill()
+        md = market_data.reindex(ar.index).ffill().bfill()
+        common = ar.index.intersection(mr.index).intersection(md.index)
+        ar = ar.loc[common].dropna()
+        mr = mr.loc[common].dropna()
+        md = md.loc[common].dropna()
+        common = ar.index.intersection(mr.index).intersection(md.index)
+        ar = ar.loc[common]
+        mr = mr.loc[common]
+        md = md.loc[common]
+        feat_list = []
+        for w in [8, 21, 63]:
+            feat_list.append(ar.ewm(span=w).mean().values)
+        for w in [8, 21, 63]:
+            feat_list.append(_rsi(ar, w))
+        for w in [8, 21, 63]:
+            feat_list.append(_stoch_k(ar, w))
+        feat_list.append(_macd(ar, 8, 21))
+        feat_list.append(_macd(ar, 21, 63))
+        log_ret = np.log(1 + ar)
+        downside = np.where(ar < 0, log_ret ** 2, 0)
+        dd_21 = pd.Series(downside, index=ar.index).rolling(21).mean()
+        feat_list.append(np.sqrt(dd_21.fillna(0)).values)
+        cov_21 = (ar * mr).rolling(21).mean() - ar.rolling(21).mean() * mr.rolling(21).mean()
+        var_m_21 = mr.rolling(21).var().replace(0, np.nan)
+        beta = (cov_21 / var_m_21).fillna(0)
+        feat_list.append(beta.values)
+        feat_list.append(mr.ewm(span=21).mean().values)
+        vix_log = np.log(md['vix'].replace(0, np.nan).ffill() + 1)
+        feat_list.append(vix_log.values)
+        feat_list.append(md['vix'].diff().values)
+        feat_list.append(md['vix'].ewm(span=21).mean().values)
+        y2d = md['yield_2y'].diff().ewm(span=21).mean()
+        feat_list.append(y2d.values)
+        slope = md['yield_10y'] - md['yield_2y']
+        slope_diff = slope.diff().ewm(span=21).mean()
+        feat_list.append(slope_diff.values)
+        n = len(ar)
+        features = np.column_stack([f[:n] if len(f) >= n else np.resize(f, n) for f in feat_list])
+        features = pd.DataFrame(features, index=ar.index)
+        return features.reindex(idx).values
     
-    def fit(self, returns):
+    def _calculate_features_legacy(self, returns):
+        """Legacy 4-feature set when market data unavailable"""
+        w = 20
+        return np.column_stack([
+            returns.ewm(span=w).mean().values,
+            _rsi(returns if isinstance(returns, pd.Series) else pd.Series(returns), 14),
+            returns.rolling(w).sum().values,
+            returns.rolling(w).std().values
+        ])
+    
+    def fit(self, active_return, market_data=None, market_returns=None, factor_name=None):
         """Fit the sparse jump model using alternating optimization"""
-        # Calculate and standardize features
-        features = self._calculate_features(returns)
+        if market_data is None or market_returns is None:
+            features = self._calculate_features_legacy(active_return)
+        else:
+            features = self._calculate_features(
+                active_return, market_data, factor_name or 'factor', market_returns
+            )
         valid_idx = ~np.isnan(features).any(axis=1)
         features_clean = features[valid_idx]
         
@@ -128,9 +210,9 @@ class SparseJumpModel:
         self.centroids_ = centroids
         
         # Map back to original time series
-        self.regimes_ = pd.Series(index=returns.index, dtype=float)
+        self.regimes_ = pd.Series(index=active_return.index, dtype=float)
         self.regimes_.iloc[valid_idx] = regimes
-        self.regimes_ = self.regimes_.fillna(method='ffill').fillna(0)
+        self.regimes_ = self.regimes_.ffill().fillna(0)
         
         return self
     
@@ -441,9 +523,11 @@ class HelixFactorStrategy:
         self.lookback_days = lookback_days
         self.rebalance_threshold = rebalance_threshold
         self.regime_models = {}
-        self.optimizer = BlackLittermanOptimizer()
+        self.regime_means = {}   # factor -> {regime: mean_active_return_annualized}
+        self.optimizer = BlackLittermanOptimizer(risk_aversion=RISK_AVERSION)
         self.current_weights = None
         self.data = None
+        self.market_data = None
         
     def fetch_data(self, start_date, end_date):
         """Fetch ETF price data"""
@@ -469,10 +553,16 @@ class HelixFactorStrategy:
                 data = data.to_frame(list(self.factor_etfs.keys())[0])
             
             # Forward fill missing data
-            data = data.fillna(method='ffill').dropna()
+            data = data.ffill().dropna()
             logger.info("Retrieved {} days of data".format(len(data)))
             
             self.data = data
+            try:
+                self.market_data = fetch_market_data(start_date, end_date)
+                self.market_data = self.market_data.reindex(data.index).ffill().bfill()
+            except Exception as e:
+                logger.warning("Market data fetch failed, using legacy features: {}".format(e))
+                self.market_data = None
             return data
             
         except Exception as e:
@@ -487,59 +577,78 @@ class HelixFactorStrategy:
         returns = self.data.pct_change().dropna()
         return returns
     
-    def fit_regime_models(self, returns):
-        """Fit regime models for each factor ETF"""
-        logger.info("Fitting regime models...")
+    def fit_regime_models(self, active_returns, market_returns, sjm_config=None):
+        """
+        Fit 6 SJMs (one per factor) on active returns. No model for SPY.
+        sjm_config: optional dict of factor -> {jump_penalty, sparsity_param} for per-factor overrides.
+        """
+        logger.info("Fitting regime models on active returns (6 factors)...")
+        self.regime_means = {}
+        market_ret = market_returns.reindex(active_returns.index).ffill().bfill()
         
-        for etf in returns.columns:
-            logger.info("Fitting regime model for {}".format(etf))
-            model = SparseJumpModel()
-            
+        for factor in active_returns.columns:
+            logger.info("Fitting regime model for {}".format(factor))
+            cfg = (sjm_config or {}).get(factor, {})
+            model = SparseJumpModel(
+                jump_penalty=cfg.get('jump_penalty', DEFAULT_JUMP_PENALTY),
+                sparsity_param=cfg.get('sparsity_param', DEFAULT_SPARSITY_PARAM)
+            )
             try:
-                model.fit(returns[etf])
-                self.regime_models[etf] = model
-            except Exception as e:
-                logger.warning("Failed to fit model for {}: {}".format(etf, e))
-                # Use dummy model that always predicts regime 0
-                dummy_model = SparseJumpModel()
-                dummy_model.regimes_ = pd.Series(0, index=returns.index)
-                self.regime_models[etf] = dummy_model
-    
-    def generate_expected_returns(self, returns, current_regimes):
-        """Generate expected returns based on current regimes"""
-        expected_returns = pd.Series(index=returns.columns, dtype=float)
-        
-        for etf in returns.columns:
-            regime = current_regimes.get(etf, 0)
-            etf_returns = returns[etf]
-            
-            if len(etf_returns) == 0:
-                expected_returns[etf] = 0.0
-                continue
-            
-            # Regime-based expected return calculation
-            if regime == 1:  # Positive regime
-                # Use recent positive returns
-                positive_returns = etf_returns[etf_returns > 0]
-                if len(positive_returns) > 0:
-                    expected_returns[etf] = positive_returns.tail(20).mean()
+                if self.market_data is not None and not self.market_data.empty:
+                    model.fit(
+                        active_returns[factor],
+                        market_data=self.market_data,
+                        market_returns=market_ret,
+                        factor_name=factor
+                    )
                 else:
-                    expected_returns[etf] = etf_returns.tail(20).mean()
-            else:  # Negative/neutral regime
-                # Use more conservative estimate
-                expected_returns[etf] = etf_returns.tail(60).mean() * 0.5
-        
-        return expected_returns
+                    model.fit(active_returns[factor])
+                self.regime_models[factor] = model
+                regimes = model.regimes_
+                means = {}
+                for k in range(model.n_regimes):
+                    mask = (regimes == k) & regimes.index.isin(active_returns.index)
+                    if mask.sum() > 0:
+                        mu = active_returns.loc[mask, factor].mean() * 252
+                        means[k] = np.clip(mu, -EXPECTED_RETURN_CAP, EXPECTED_RETURN_CAP)
+                    else:
+                        means[k] = 0.0
+                self.regime_means[factor] = means
+            except Exception as e:
+                logger.warning("Failed to fit model for {}: {}".format(factor, e))
+                dummy = SparseJumpModel()
+                dummy.regimes_ = pd.Series(0, index=active_returns.index)
+                self.regime_models[factor] = dummy
+                self.regime_means[factor] = {0: 0.0}
     
-    def optimize_portfolio(self, returns, expected_returns):
-        """Optimize portfolio weights"""
-        
-        # Calculate covariance matrix
-        cov_matrix = returns.cov()
-        
-        # Get optimized weights
-        weights = self.optimizer.optimize(expected_returns, cov_matrix)
-        
+    def generate_expected_returns(self, current_regimes):
+        """
+        Expected active returns from regime historical averages (Phase 4).
+        Returns dict {factor: expected_active_return} for the 6 factors.
+        Stored as annualized; convert to daily for BL (covariance is daily).
+        """
+        expected = {}
+        for factor in self.regime_models:
+            regime = int(current_regimes.get(factor, 0))
+            means = self.regime_means.get(factor, {0: 0.0})
+            ann = means.get(regime, 0.0)
+            expected[factor] = ann / 252.0  # daily for BL
+        return expected
+    
+    def _ewma_covariance(self, returns):
+        """EWMA covariance with halflife=126 days."""
+        span = 2 * COV_HALFLIFE - 1
+        alpha = 2.0 / (span + 1)
+        r = returns.fillna(0).values
+        cov = np.outer(r[0], r[0])
+        for i in range(1, len(r)):
+            cov = alpha * np.outer(r[i], r[i]) + (1 - alpha) * cov
+        return pd.DataFrame(cov, index=returns.columns, columns=returns.columns)
+    
+    def optimize_portfolio(self, returns, expected_active_returns):
+        """Optimize portfolio weights using EWMA covariance (halflife=126)"""
+        cov_matrix = self._ewma_covariance(returns)
+        weights = self.optimizer.optimize(expected_active_returns, cov_matrix)
         return weights
     
     def should_rebalance(self, new_weights):
@@ -554,67 +663,58 @@ class HelixFactorStrategy:
         return max_change > self.rebalance_threshold
     
     def backtest(self, start_date, end_date):
-        """Run backtest of the strategy"""
+        """Run backtest with paper alignment: active returns, 1-day delay, 5 bps tx costs"""
         logger.info("Starting backtest from {} to {}".format(start_date, end_date))
         
-        # Fetch data
         data = self.fetch_data(start_date, end_date)
         returns = self.calculate_returns()
+        active_returns = compute_active_returns(returns, market_col=MARKET_ETF)
+        market_returns = returns[MARKET_ETF]
         
-        # Fit regime models
-        self.fit_regime_models(returns)
+        self.fit_regime_models(active_returns, market_returns)
         
-        # Initialize tracking variables
         portfolio_values = []
         weights_history = []
         rebalance_dates = []
-        
-        initial_value = 100000  # $100k initial portfolio
+        initial_value = 100000
         current_value = initial_value
+        txn_cost_bps = TXN_COST_BPS / 10000
         
-        # Start from lookback period
-        start_idx = max(self.lookback_days, 60)  # Ensure enough data for models
+        start_idx = max(self.lookback_days, 252)
         
         for i in range(start_idx, len(returns)):
             current_date = returns.index[i]
+            recent_returns = returns.iloc[max(0, i - self.lookback_days):i]
             
-            # Get recent returns for optimization
-            recent_returns = returns.iloc[max(0, i-self.lookback_days):i]
-            
-            if len(recent_returns) < 60:  # Skip if not enough data
+            if len(recent_returns) < 252:
                 portfolio_values.append(current_value)
                 continue
             
-            # Get current regimes
+            regime_idx = max(0, i - 2)  # One-day delay: regime at T-2 applied at T
             current_regimes = {}
-            for etf in self.factor_etfs.keys():
-                if etf in self.regime_models:
-                    regime_series = self.regime_models[etf].regimes_
-                    if i < len(regime_series):
-                        current_regimes[etf] = regime_series.iloc[i]
-                    else:
-                        current_regimes[etf] = 0
+            for factor in self.regime_models:
+                rs = self.regime_models[factor].regimes_
+                if regime_idx < len(rs):
+                    current_regimes[factor] = int(rs.iloc[regime_idx])
                 else:
-                    current_regimes[etf] = 0
+                    current_regimes[factor] = 0
             
-            # Generate expected returns
-            expected_returns = self.generate_expected_returns(recent_returns, current_regimes)
+            expected_active = self.generate_expected_returns(current_regimes)
             
-            # Optimize portfolio
             try:
-                new_weights = self.optimize_portfolio(recent_returns, expected_returns)
+                new_weights = self.optimize_portfolio(recent_returns, expected_active)
             except Exception as e:
                 logger.warning("Optimization failed on {}: {}".format(current_date, e))
-                # Use equal weights as fallback
-                new_weights = pd.Series(1.0/len(self.factor_etfs), index=self.factor_etfs.keys())
+                new_weights = pd.Series(1.0 / len(self.factor_etfs), index=self.factor_etfs.keys())
             
-            # Check if rebalancing is needed
             if self.should_rebalance(new_weights):
+                if self.current_weights is not None:
+                    weight_chg = abs(new_weights - self.current_weights).sum()
+                    current_value *= (1 - txn_cost_bps * weight_chg)
                 self.current_weights = new_weights.copy()
                 rebalance_dates.append(current_date)
                 weights_history.append((current_date, new_weights.copy()))
             
-            # Calculate portfolio return
             if self.current_weights is not None and i > 0:
                 daily_returns = returns.iloc[i]
                 portfolio_return = (self.current_weights * daily_returns).sum()

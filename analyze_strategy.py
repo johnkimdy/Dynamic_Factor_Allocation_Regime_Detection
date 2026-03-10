@@ -19,14 +19,27 @@ def run_analysis():
     
     strategy = HelixFactorStrategy()
     
-    # Run multiple test periods including August 2025
-    test_periods = [
+    # Test periods: grouped by ending year, sorted by starting year desc within each group
+    # Order: 2024-2025, 2023-2025, 2022-2025, ..., 2017-2025 | 2023-2024, 2022-2024, ... | 2022-2023, 2021-2023
+    _raw_periods = [
+        # Ending 2025
+        ('2024-01-01', '2025-08-31', '2024-2025'),
+        ('2023-01-01', '2025-08-31', '2023-2025'),
+        ('2022-01-01', '2025-08-31', '2022-2025'),
+        ('2021-01-01', '2025-08-31', '2021-2025'),
+        ('2020-01-01', '2025-08-31', '2020-2025'),
+        ('2019-01-01', '2025-08-31', '2019-2025'),
+        ('2018-01-01', '2025-08-31', '2018-2025'),
+        ('2017-01-01', '2025-08-31', '2017-2025'),
+        # Ending 2024
+        ('2023-01-01', '2024-12-31', '2023-2024'),
+        ('2022-01-01', '2024-12-31', '2022-2024'),
+        ('2021-01-01', '2024-12-31', '2021-2024'),
+        # Ending 2023
         ('2022-01-01', '2023-12-31', '2022-2023'),
         ('2021-01-01', '2023-12-31', '2021-2023'),
-        ('2023-01-01', '2024-12-31', '2023-2024'),
-        ('2024-01-01', '2025-08-31', '2024-2025'),
-        ('2022-01-01', '2025-08-31', '2022-2025')
     ]
+    test_periods = sorted(_raw_periods, key=lambda p: (-int(p[1][:4]), -int(p[0][:4])))
     
     results_summary = []
     
@@ -73,7 +86,8 @@ def run_analysis():
             # Calculate active return metrics relative to SPY (simplified)
             try:
                 import yfinance as yf
-                spy_data = yf.download('SPY', start=start_date, end=end_date, auto_adjust=True)['Close']
+                spy_raw = yf.download('SPY', start=start_date, end=end_date, auto_adjust=True, progress=False)
+                spy_data = spy_raw['Close'].squeeze()
                 
                 # Calculate total returns
                 spy_total_return = (spy_data.iloc[-1] / spy_data.iloc[0]) - 1
@@ -131,42 +145,73 @@ def run_analysis():
                 int(row['n_rebalances'])
             ))
     
-    # Benchmark comparison
-    print("\n" + "=" * 80)
-    print("BENCHMARK COMPARISON (SPY)")
-    print("=" * 80)
+    # Benchmark comparison vs SPY for all timeframes
+    print("\n" + "=" * 110)
+    print("BENCHMARK COMPARISON vs SPY (ALL PERIODS)")
+    print("=" * 110)
     
     try:
-        import yfinance as yf
+        comparison_rows = []
+        for strat in results_summary:
+            start_date = strat['start_date']
+            end_date = strat['end_date']
+            period_name = strat['period']
+            try:
+                spy_raw = yf.download('SPY', start=start_date, end=end_date, auto_adjust=True, progress=False)
+                spy_data = spy_raw['Close'].squeeze()
+                spy_returns = spy_data.pct_change().dropna()
+                
+                spy_total_return = float((spy_data.iloc[-1] / spy_data.iloc[0]) - 1)
+                spy_volatility = float(spy_returns.std() * np.sqrt(252))
+                spy_sharpe = float(spy_returns.mean() / spy_returns.std() * np.sqrt(252))
+                
+                spy_cumulative = spy_data / spy_data.iloc[0]
+                spy_running_max = spy_cumulative.expanding().max()
+                spy_drawdown = (spy_cumulative - spy_running_max) / spy_running_max
+                spy_max_dd = float(spy_drawdown.min())
+                
+                comparison_rows.append({
+                    'period': period_name,
+                    'helix_return': strat['total_return'],
+                    'spy_return': spy_total_return,
+                    'return_diff': strat['total_return'] - spy_total_return,
+                    'helix_sharpe': strat['sharpe_ratio'],
+                    'spy_sharpe': spy_sharpe,
+                    'sharpe_diff': strat['sharpe_ratio'] - spy_sharpe,
+                    'helix_vol': strat['volatility'],
+                    'spy_vol': spy_volatility,
+                    'vol_diff': strat['volatility'] - spy_volatility,
+                    'helix_dd': strat['max_drawdown'],
+                    'spy_dd': spy_max_dd,
+                })
+            except Exception as e:
+                print("Could not fetch SPY for {}: {}".format(period_name, e))
         
-        # Get SPY benchmark for 2022-2023
-        spy_data = yf.download('SPY', start='2024-01-01', end='2025-08-31', auto_adjust=True)['Close']
-        spy_returns = spy_data.pct_change().dropna()
-        
-        spy_total_return = (spy_data.iloc[-1] / spy_data.iloc[0]) - 1
-        spy_volatility = spy_returns.std() * np.sqrt(252)
-        spy_sharpe = spy_returns.mean() / spy_returns.std() * np.sqrt(252)
-        
-        # Calculate SPY max drawdown
-        spy_cumulative = spy_data / spy_data.iloc[0]
-        spy_running_max = spy_cumulative.expanding().max()
-        spy_drawdown = (spy_cumulative - spy_running_max) / spy_running_max
-        spy_max_dd = spy_drawdown.min()
-        
-        print("SPY (2024-2025):")
-        print("Total Return: {:.2%}".format(float(spy_total_return)))
-        print("Sharpe Ratio: {:.2f}".format(float(spy_sharpe)))
-        print("Volatility: {:.2%}".format(float(spy_volatility)))
-        print("Max Drawdown: {:.2%}".format(float(spy_max_dd)))
-        
-        # Compare with our strategy (2022-2023 period)
-        strategy_2022_2023 = [r for r in results_summary if r['period'] == '2024-2025']
-        if strategy_2022_2023:
-            strat = strategy_2022_2023[0]
-            print("\nHelix 1.1 vs SPY (2024-2025):")
-            print("Return Difference: {:.2%}".format(float(strat['total_return'] - spy_total_return)))
-            print("Sharpe Difference: {:.2f}".format(float(strat['sharpe_ratio'] - spy_sharpe)))
-            print("Volatility Difference: {:.2%}".format(float(strat['volatility'] - spy_volatility)))
+        if comparison_rows:
+            print("\n{:<12} | {:>12} | {:>12} | {:>10} | {:>8} | {:>8} | {:>8} | {:>8} | {:>8} | {:>8}".format(
+                "Period", "Helix Ret", "SPY Ret", "Ret Diff", "Helix SR", "SPY SR", "SR Diff", "Helix Vol", "SPY Vol", "Vol Diff"
+            ))
+            print("-" * 110)
+            for r in comparison_rows:
+                print("{:<12} | {:>11.2%} | {:>11.2%} | {:>+9.2%} | {:>7.2f} | {:>7.2f} | {:>+7.2f} | {:>7.2%} | {:>7.2%} | {:>+7.2%}".format(
+                    r['period'],
+                    r['helix_return'],
+                    r['spy_return'],
+                    r['return_diff'],
+                    r['helix_sharpe'],
+                    r['spy_sharpe'],
+                    r['sharpe_diff'],
+                    r['helix_vol'],
+                    r['spy_vol'],
+                    r['vol_diff']
+                ))
+            print("\n{:<12} | {:>12} | {:>12} | {:>10}".format("Period", "Helix Max DD", "SPY Max DD", "DD Diff"))
+            print("-" * 55)
+            for r in comparison_rows:
+                dd_diff = r['helix_dd'] - r['spy_dd']
+                print("{:<12} | {:>11.2%} | {:>11.2%} | {:>+9.2%}".format(
+                    r['period'], r['helix_dd'], r['spy_dd'], dd_diff
+                ))
         
     except Exception as e:
         print("Error getting SPY benchmark: {}".format(e))

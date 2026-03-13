@@ -112,17 +112,49 @@ print("Max Drawdown: {:.2%}".format(results['max_drawdown']))
 python analyze_strategy.py
 ```
 
-### Hyperparameter Tuning (with W&B)
+### Dashboard (Next.js)
 ```bash
-# Install W&B
-pip install wandb
+# Export backtest data (from project root, with conda/venv active)
+python analyze_strategy.py --export --quick   # 3 periods
+python analyze_strategy.py --export           # All periods
 
-# Run tuning; logs to Weights & Biases (login prompt on first run)
+# Start the dashboard
+cd dashboard && npm install && npm run dev
+```
+Open [http://localhost:3000](http://localhost:3000) to visualize active rebalancing with a period dropdown.
+
+### Hyperparameter Tuning (Optuna + W&B)
+```bash
+pip install optuna wandb
+
+# Run Optuna search (50 trials per factor by default)
 python tune_sjm_hyperparameters.py
+
+# Fewer trials for quick test
+python tune_sjm_hyperparameters.py --n-trials 20
+
+# Disable W&B
+python tune_sjm_hyperparameters.py --no-wandb
 ```
 - **Horizons** (per paper Exhibit 1): data 1993–2024, test 2007–2024
 - **W&B**: Logs config, per-combo metrics, best params, and `sjm_hyperparameters.csv` as artifact
 - **Disable W&B**: `WANDB_MODE=disabled python tune_sjm_hyperparameters.py`
+
+### Production Pipeline (JOH-9)
+```bash
+# Full pipeline: tune → store → train → validate
+python run_sjm_pipeline.py
+
+# Individual steps
+python run_sjm_pipeline.py --step tune --n-trials 30
+python run_sjm_pipeline.py --step store              # Persist to config/ + W&B Artifacts
+python run_sjm_pipeline.py --step train              # Train prod models with stored params
+python run_sjm_pipeline.py --step validate           # Validate regime inference
+python run_sjm_pipeline.py --step promote --promote-version 20240311_120000  # Rollback target
+```
+- **Parameter store**: `config/` (local JSON, versioned) and W&B Artifacts (cloud)
+- **Backtest/analyze**: Auto-loads params from `config/sjm_params_production.json` when available
+- **Weekly tuning**: `.github/workflows/sjm-weekly-tune.yml` (Mon 00:00 UTC) or cron: `0 0 * * 1 python run_sjm_pipeline.py --step tune --n-trials 20`
 
 ## Theoretical Foundation
 
@@ -151,6 +183,14 @@ This implementation draws from ["Portfolio Allocation Using Sparse Jump Model"](
 - **Factor timing risk**: Regime models may fail during market transitions
 - **Concentration risk**: Limited diversification across asset classes
 - **Model risk**: Simple regime identification may miss complex market dynamics
+
+## Documentation
+
+Implementation notes, audits, and reports are in [`docs/`](docs/):
+
+- [AUDIT_PRINCETON_PAPER.md](docs/AUDIT_PRINCETON_PAPER.md) – Alignment with Princeton Dynamic Factor Allocation paper
+- [IMPLEMENTATION_AUDIT.md](docs/IMPLEMENTATION_AUDIT.md) – Implementation status vs. paper
+- [TUNE_TEMPORAL_SPLIT_REPORT.md](docs/TUNE_TEMPORAL_SPLIT_REPORT.md) – Hyperparameter tuning and temporal splits
 
 ## Installation & Requirements
 

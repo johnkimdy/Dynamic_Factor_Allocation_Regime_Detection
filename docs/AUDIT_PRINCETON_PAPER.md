@@ -182,13 +182,13 @@ Market-environment features: market return EWMA, VIX (log, diff, EWMA), 2Y yield
 - [x] **SJM hyperparameters:** Tune λ and κ per factor via single-factor long-short CV (`tune_sjm_hyperparameters.py`).
 - [x] **Online inference:** One-day delay (regime at T applied from T+2); lookback algorithm not yet implemented.
 - [x] **Covariance:** EWMA with halflife 126 days instead of sample covariance.
-- [ ] **Tracking error:** Target 1–4% TE and set view confidence accordingly.
+- [x] **Tracking error:** Target 1–4% TE and set view confidence accordingly (`--target-te`, `target_tracking_error`).
 - [x] **Transaction costs:** Apply 5 bps in performance evaluation.
 
 ### Nice to have
 
-- [ ] Benchmark: explicit EW portfolio rebalanced quarterly for comparison.
-- [ ] Training window: expanding 8–12 years, monthly refit.
+- [x] Benchmark: explicit EW portfolio rebalanced quarterly for comparison (`compute_ew7_benchmark`).
+- [x] Training window: expanding 8–12 years, monthly refit (min_train_days in `paper_aligned.json`).
 
 ---
 

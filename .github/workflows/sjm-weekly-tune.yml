@@ -1,0 +1,42 @@
+# JOH-9: Weekly SJM hyperparameter tuning pipeline
+# Runs every Monday at 00:00 UTC
+name: SJM Weekly Tune
+
+on:
+  schedule:
+    - cron: '0 0 * * 1'
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  tune:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run SJM pipeline (tune + store)
+        env:
+          WANDB_MODE: disabled  # Set to 'run' and add WANDB_API_KEY secret for cloud logging
+        run: |
+          python run_sjm_pipeline.py --step tune --n-trials 20 --no-wandb
+          python run_sjm_pipeline.py --step store --no-wandb
+
+      - name: Validate
+        run: |
+          python run_sjm_pipeline.py --step validate --no-wandb || true
+
+      - name: Upload config artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sjm-config-${{ github.run_id }}
+          path: |
+            config/
+            sjm_hyperparameters.csv

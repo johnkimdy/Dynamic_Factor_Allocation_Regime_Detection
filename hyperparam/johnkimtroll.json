@@ -1,0 +1,18 @@
+{
+  "metadata": {
+    "data_start": "1993-01-01",
+    "data_end": "2025-12-31",
+    "validation_start": "2012-01-01",
+    "validation_end": "2022-12-31",
+    "holdout_start": "2023-04-01",
+    "holdout_end": "2025-12-31",
+    "embargo_months": 3,
+    "n_trials_per_factor": 100,
+    "n_jobs": 4,
+    "lambda_low": 5.0,
+    "lambda_high": 150.0,
+    "kappa_low": 2.0,
+    "kappa_high": 18.0,
+    "note": "Copy this file, edit metadata, run: python tune_sjm_hyperparameters.py --config <your_config.json>"
+  }
+}

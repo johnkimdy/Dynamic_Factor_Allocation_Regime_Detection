@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s http://localhost:3000/backtest_data_asymmetric.json)",
+      "Bash(ls -la /Users/johnkim/dev/Dynamic_Factor_Allocation_Regime_Detection/dashboard/public/backtest_data*.json)",
+      "Bash(curl -s http://localhost:3000/backtest_data.json)",
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(''''keys:'''', list\\(d[''''periods''''][0][''''benchmarks''''].keys\\(\\)\\)\\)\")",
+      "Bash(python -c \":*)",
+      "WebFetch(domain:linear.app)",
+      "mcp__claude_ai_Linear__get_issue",
+      "mcp__claude_ai_Linear__save_comment",
+      "Bash(python3.11 -c \"import json; d=json.load\\(open\\(''/Users/johnkim/dev/Dynamic_Factor_Allocation_Regime_Detection/dashboard/public/backtest_data_asymmetric.json''\\)\\); p=d[''periods''][0]; import copy; pc=copy.deepcopy\\(p\\); pc[''portfolio_values'']=pc[''portfolio_values''][:3]; pc[''ew7_values'']=pc[''ew7_values''][:3]; pc[''spy_values'']=pc[''spy_values''][:3]; pc[''weights_history'']=pc[''weights_history''][:1]; print\\(json.dumps\\(pc, indent=2\\)\\)\")",
+      "Bash(python3 -c \"import json; d=json.load\\(open\\(''/Users/johnkim/dev/Dynamic_Factor_Allocation_Regime_Detection/dashboard/public/backtest_data_asymmetric.json''\\)\\); p=d[''periods''][0]; import copy; pc=copy.deepcopy\\(p\\); pc[''portfolio_values'']=pc[''portfolio_values''][:3]; pc[''ew7_values'']=pc[''ew7_values''][:3]; pc[''spy_values'']=pc[''spy_values''][:3]; pc[''weights_history'']=pc[''weights_history''][:1]; print\\(json.dumps\\(pc, indent=2\\)\\)\")",
+      "mcp__claude_ai_Linear__save_issue",
+      "Bash(git push:*)"
+    ]
+  }
+}

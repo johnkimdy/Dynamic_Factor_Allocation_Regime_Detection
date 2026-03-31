@@ -6,7 +6,8 @@ import numpy as np
 # Get data for 2024-2025 to understand what happened
 print("=== ANALYZING WHY HELIX 1.1 FAILED IN 2024-2025 ===\n")
 
-spy_data = yf.download('SPY', start='2024-01-01', end='2025-08-31', auto_adjust=True)['Close']
+_end = pd.Timestamp.now().strftime('%Y-%m-%d')
+spy_data = yf.download('SPY', start='2024-01-01', end=_end, auto_adjust=True)['Close']
 print('SPY 2024-2025 Performance:')
 print('Start: ${:.2f}'.format(float(spy_data.iloc[0])))
 print('End: ${:.2f}'.format(float(spy_data.iloc[-1])))
@@ -15,7 +16,7 @@ print('Total Return: {:.2%}'.format(float(spy_return)))
 
 # Get our factor ETFs
 etfs = ['SPY', 'QUAL', 'MTUM', 'USMV', 'VLUE', 'SIZE', 'IWF']
-data = yf.download(etfs, start='2024-01-01', end='2025-08-31', auto_adjust=True)['Close']
+data = yf.download(etfs, start='2024-01-01', end=_end, auto_adjust=True)['Close']
 
 print('\n=== Factor ETF Performance 2024-2025 ===')
 for etf in etfs:

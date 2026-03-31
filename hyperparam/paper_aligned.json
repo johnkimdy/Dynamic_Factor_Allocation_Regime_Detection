@@ -1,0 +1,24 @@
+{
+  "metadata": {
+    "data_start": "1993-01-01",
+    "data_end": "2024-12-31",
+    "validation_start": "2007-01-01",
+    "validation_end": "2022-12-31",
+    "holdout_start": "2023-01-01",
+    "holdout_end": "2024-12-31",
+    "embargo_months": 0,
+    "min_train_days": 2016,
+    "n_trials_per_factor": 100,
+    "n_jobs": 4,
+    "lambda_low": 5.0,
+    "lambda_high": 150.0,
+    "kappa_low": 2.0,
+    "kappa_high": 18.0,
+    "n_trials_asymmetric": 80,
+    "lambda_enter_low": 5.0,
+    "lambda_enter_high": 200.0,
+    "lambda_exit_low": 5.0,
+    "lambda_exit_high": 200.0,
+    "note": "Paper-aligned: validation 2007-2022, holdout 2023-2024, min train 8y (2016 days). Annual tuning schedule: (1) python tune_sjm_hyperparameters.py --config hyperparam/paper_aligned.json --mode symmetric --no-wandb; (2) python tune_sjm_hyperparameters.py --config hyperparam/paper_aligned.json --mode asymmetric --no-wandb"
+  }
+}

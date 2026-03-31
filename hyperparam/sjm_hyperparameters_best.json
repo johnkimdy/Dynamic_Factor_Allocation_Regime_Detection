@@ -1,0 +1,52 @@
+{
+  "metadata": {
+    "note": "Per-factor best (merged from runs)",
+    "last_updated": "2026-03-13T13:20:28",
+    "last_merge_from": "sjm_hyperparameters_20260313_051222.json"
+  },
+  "results": {
+    "QUAL": {
+      "lambda": 50.15213894639463,
+      "kappa_sq": 5.028576523228043,
+      "sharpe": 0.7412293090756653,
+      "holdout_sharpe": -0.5690393488252685,
+      "source_run": "sjm_hyperparameters_20260313_051222.json"
+    },
+    "MTUM": {
+      "lambda": 5.972683899355701,
+      "kappa_sq": 6.1013955025955955,
+      "sharpe": 0.7920974355541617,
+      "holdout_sharpe": -0.7068280026691873,
+      "source_run": "sjm_hyperparameters_20260313_051222.json"
+    },
+    "USMV": {
+      "lambda": 40.73016247498099,
+      "kappa_sq": 2.063029932185878,
+      "sharpe": 0.5866838747333014,
+      "holdout_sharpe": 0.7951814931668718,
+      "source_run": "sjm_hyperparameters_20260312_151314.json"
+    },
+    "VLUE": {
+      "lambda": 7.339756419067581,
+      "kappa_sq": 3.676505544448559,
+      "sharpe": 0.6518653315303662,
+      "holdout_sharpe": 0.26544753475522254,
+      "source_run": "sjm_hyperparameters_20260312_151314.json"
+    },
+    "SIZE": {
+      "lambda": 16.9450878356436,
+      "kappa_sq": 2.0636122431416317,
+      "sharpe": 0.7186027748894944,
+      "holdout_sharpe": 0.645256458973314,
+      "source_run": "sjm_hyperparameters_20260312_151314.json"
+    },
+    "IWF": {
+      "lambda": 60.92452561217843,
+      "kappa_sq": 3.859176715637151,
+      "sharpe": 1.038470828260362,
+      "holdout_sharpe": 0.8629179261379871,
+      "source_run": "sjm_hyperparameters_20260312_151314.json"
+    }
+  },
+  "mean_oos_sharpe": 0.7548249256738919
+}

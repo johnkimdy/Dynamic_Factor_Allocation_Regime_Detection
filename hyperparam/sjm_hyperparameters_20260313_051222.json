@@ -1,0 +1,61 @@
+{
+  "metadata": {
+    "data_start": "1993-01-01",
+    "data_end": "2024-12-31",
+    "validation_start": "2007-01-01",
+    "validation_end": "2022-12-31",
+    "holdout_start": "2023-01-01",
+    "holdout_end": "2024-12-31",
+    "embargo_months": 0,
+    "min_train_days": 2016,
+    "n_trials_per_factor": 100,
+    "n_jobs": 4,
+    "lambda_low": 5.0,
+    "lambda_high": 150.0,
+    "kappa_low": 2.0,
+    "kappa_high": 18.0,
+    "note": "Paper-aligned: validation 2007-2022 (paper test period start), holdout 2023-2024. Min train 8 years (2016 days). Use with analyze_strategy --paper-periods for 2007-2024 comparison.",
+    "run_date": "2026-03-13T13:20:28",
+    "elapsed_sec": 2617.9
+  },
+  "mean_oos_sharpe": 0.5719249163395033,
+  "mean_holdout_sharpe": 0.5755063785806264,
+  "results": {
+    "QUAL": {
+      "lambda": 50.15213894639463,
+      "kappa_sq": 5.028576523228043,
+      "sharpe": 0.7412293090756653,
+      "holdout_sharpe": -0.5690393488252685
+    },
+    "MTUM": {
+      "lambda": 5.972683899355701,
+      "kappa_sq": 6.1013955025955955,
+      "sharpe": 0.7920974355541617,
+      "holdout_sharpe": -0.7068280026691873
+    },
+    "USMV": {
+      "lambda": 5.457045385422124,
+      "kappa_sq": 3.173984171501968,
+      "sharpe": 0.5053223318297099,
+      "holdout_sharpe": 0.9020236905987045
+    },
+    "VLUE": {
+      "lambda": 7.078710922356007,
+      "kappa_sq": 3.787797850606811,
+      "sharpe": 0.45730670309580324,
+      "holdout_sharpe": 1.588310426088215
+    },
+    "SIZE": {
+      "lambda": 20.734088973884457,
+      "kappa_sq": 11.115803160579524,
+      "sharpe": 0.4688532410234619,
+      "holdout_sharpe": 0.7981174290728988
+    },
+    "IWF": {
+      "lambda": 15.738549703354966,
+      "kappa_sq": 6.804656611356017,
+      "sharpe": 0.4667404774582177,
+      "holdout_sharpe": 1.4404540772183962
+    }
+  }
+}

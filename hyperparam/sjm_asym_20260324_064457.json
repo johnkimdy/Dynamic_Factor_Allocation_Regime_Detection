@@ -1,0 +1,73 @@
+{
+  "metadata": {
+    "data_start": "1993-01-01",
+    "data_end": "2024-12-31",
+    "validation_start": "2007-01-01",
+    "validation_end": "2022-12-31",
+    "holdout_start": "2023-01-01",
+    "holdout_end": "2024-12-31",
+    "embargo_months": 0,
+    "min_train_days": 2016,
+    "n_trials_per_factor": 100,
+    "n_jobs": 4,
+    "lambda_low": 5.0,
+    "lambda_high": 150.0,
+    "kappa_low": 2.0,
+    "kappa_high": 18.0,
+    "n_trials_asymmetric": 80,
+    "lambda_enter_low": 5.0,
+    "lambda_enter_high": 200.0,
+    "lambda_exit_low": 5.0,
+    "lambda_exit_high": 200.0,
+    "note": "Paper-aligned: validation 2007-2022, holdout 2023-2024, min train 8y (2016 days). Annual tuning schedule: (1) python tune_sjm_hyperparameters.py --config hyperparam/paper_aligned.json --mode symmetric --no-wandb; (2) python tune_sjm_hyperparameters.py --config hyperparam/paper_aligned.json --mode asymmetric --no-wandb",
+    "run_date": "2026-03-24T15:11:26",
+    "elapsed_sec": 2010.8,
+    "mode": "asymmetric"
+  },
+  "mean_oos_sharpe": 0.2274307157598853,
+  "mean_holdout_sharpe": 0.4708779847328581,
+  "results": {
+    "QUAL": {
+      "lambda_enter": 38.62918919476663,
+      "lambda_exit": 45.867184340295644,
+      "kappa_sq": 5.028576523228043,
+      "sharpe": 0.281663126898042,
+      "holdout_sharpe": -0.8031182377967113
+    },
+    "MTUM": {
+      "lambda_enter": 160.4164605879436,
+      "lambda_exit": 125.46197191177906,
+      "kappa_sq": 6.1013955025955955,
+      "sharpe": 0.21139776385035663,
+      "holdout_sharpe": -1.1778002089502275
+    },
+    "USMV": {
+      "lambda_enter": 40.38586925265653,
+      "lambda_exit": 16.758425095494957,
+      "kappa_sq": 2.063029932185878,
+      "sharpe": 0.14484553201796224,
+      "holdout_sharpe": 1.2197745424600606
+    },
+    "VLUE": {
+      "lambda_enter": 10.331573963152326,
+      "lambda_exit": 12.32745466837983,
+      "kappa_sq": 3.676505544448559,
+      "sharpe": 0.2234283645892373,
+      "holdout_sharpe": 1.6516967941353549
+    },
+    "SIZE": {
+      "lambda_enter": 18.06188477185916,
+      "lambda_exit": 54.64840520662423,
+      "kappa_sq": 2.0636122431416317,
+      "sharpe": 0.31660190123248305,
+      "holdout_sharpe": 0.6619838916877852
+    },
+    "IWF": {
+      "lambda_enter": 24.153291265687617,
+      "lambda_exit": 10.048728032680977,
+      "kappa_sq": 3.859176715637151,
+      "sharpe": 0.18664760597123056,
+      "holdout_sharpe": 1.2727311268608867
+    }
+  }
+}

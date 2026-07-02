@@ -119,7 +119,7 @@ _STICKY_STOP = threading.Event()
 def _sticky_terminalsize() -> int:
     try:
         return shutil.get_terminal_size().lines
-    except Exception:
+    except (ValueError, OSError):
         return _STICKY_HEIGHT
 
 
@@ -472,7 +472,10 @@ def run_analysis(use_tuned_params=True, sjm_config_path=None, asym_sjm_config_pa
                     sjm_config = load(source="local", version_or_alias="latest")
                 if sjm_config:
                     print("Using tuned SJM params from param store")
+            except ImportError as e:
+                print("Param store not available: {}".format(e))
             except Exception as e:
+                logger.warning("Param store load failed: %s", e, exc_info=True)
                 print("Param store load failed ({}), using paper defaults".format(e))
         if not sjm_config:
             print("Using paper defaults (λ=50, κ²=9.5)")
@@ -490,7 +493,10 @@ def run_analysis(use_tuned_params=True, sjm_config_path=None, asym_sjm_config_pa
                 print("Using asymmetric SJM params from: {}".format(asym_path))
             else:
                 print("Warning: could not load asymmetric config from {}".format(asym_path))
+        except (json.JSONDecodeError, KeyError, ValueError) as e:
+            print("Warning: failed to parse asymmetric config ({}), skipping asym backtest".format(e))
         except Exception as e:
+            logger.warning("Unexpected error loading asymmetric config: %s", e, exc_info=True)
             print("Warning: failed to load asymmetric config ({}), skipping asym backtest".format(e))
 
     # End date for "current" periods: use today so data is always up to date
@@ -697,6 +703,7 @@ def run_analysis(use_tuned_params=True, sjm_config_path=None, asym_sjm_config_pa
                     metrics['ew7_net_dd'] = None
 
             except Exception as e:
+                logger.warning("Could not calculate active return metrics for %s: %s", period_name, e, exc_info=True)
                 print("Could not calculate active return metrics: {}".format(e))
                 metrics['active_return'] = 0
                 metrics['information_ratio'] = 0
@@ -725,6 +732,7 @@ def run_analysis(use_tuned_params=True, sjm_config_path=None, asym_sjm_config_pa
                 metrics['ew7_net_dd'] = None
             
         except Exception as e:
+            logger.error("Backtest failed for period %s: %s", period_name, e, exc_info=True)
             print("Error during backtest: {}".format(e))
         finally:
             period_times.append(time.perf_counter() - period_start)
@@ -817,6 +825,7 @@ def run_analysis(use_tuned_params=True, sjm_config_path=None, asym_sjm_config_pa
                     'spy_dd': spy_max_dd,
                 })
             except Exception as e:
+                logger.warning("Could not fetch SPY for %s: %s", period_name, e)
                 print("Could not fetch SPY for {}: {}".format(period_name, e))
         
         if comparison_rows:
@@ -852,6 +861,7 @@ def run_analysis(use_tuned_params=True, sjm_config_path=None, asym_sjm_config_pa
                 ))
 
     except Exception as e:
+        logger.error("Error getting SPY benchmark comparison: %s", e, exc_info=True)
         print("Error getting SPY benchmark: {}".format(e))
 
     # Helix vs EW7 vs SPY — Gross and Net of Fees (ER + brokerage)
@@ -996,7 +1006,8 @@ def run_analysis(use_tuned_params=True, sjm_config_path=None, asym_sjm_config_pa
                 spy_raw = yf.download('SPY', start=start_date, end=end_date, auto_adjust=True, progress=False)
                 spy_data = spy_raw['Close'].squeeze()
                 spy_ret = float((spy_data.iloc[-1] / spy_data.iloc[0]) - 1)
-            except Exception:
+            except Exception as e:
+                logger.debug("SPY download failed for %s: %s", period_name, e)
                 continue
             ew7 = compute_ew7_benchmark(start_date, end_date)
             if ew7 is None:
@@ -1016,6 +1027,7 @@ def run_analysis(use_tuned_params=True, sjm_config_path=None, asym_sjm_config_pa
                 ))
 
     except Exception as e:
+        logger.error("Error getting EW(7) benchmark comparison: %s", e, exc_info=True)
         print("Error getting EW(7) benchmark: {}".format(e))
 
     if export_output is not None and export_periods:

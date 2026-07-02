@@ -79,8 +79,10 @@ def main():
                 }
             if sjm_config:
                 _stream_log("Loaded config from " + args.config)
-        except Exception as e:
-            _stream_log("Config load failed, using defaults: " + str(e))
+        except (json.JSONDecodeError, KeyError, ValueError) as e:
+            _stream_log("Config parse failed, using defaults: " + str(e))
+        except OSError as e:
+            _stream_log("Config file read failed, using defaults: " + str(e))
     if sjm_config is None:
         sjm_config = {
             f: {"jump_penalty": args.jump_penalty, "sparsity_param": args.sparsity_param}
@@ -118,8 +120,11 @@ def main():
             try:
                 import mlflow
                 mlflow.log_metric("objective_{}".format(factor), float(objective), step=int(iteration))
-            except Exception:
-                pass
+            except Exception as e:
+                # MLflow metric logging is best-effort; don't interrupt training
+                if not getattr(on_iter, '_mlflow_warned', False):
+                    _stream_log("MLflow metric log failed (suppressing further): " + str(e))
+                    on_iter._mlflow_warned = True
 
     strategy.on_sjm_iteration = on_iter
 

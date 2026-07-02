@@ -12,6 +12,7 @@ try:
     _env_path = Path(__file__).resolve().parent.parent / ".env"
     load_dotenv(_env_path)
 except ImportError:
+    # python-dotenv is optional; FRED_API_KEY can still be set via environment
     pass
 
 import pandas as pd

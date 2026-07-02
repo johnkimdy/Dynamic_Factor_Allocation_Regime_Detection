@@ -211,8 +211,8 @@ def save_wandb(results, metadata=None, project=None):
             artifact.add_file(tf.name, "sjm_params.json")
         try:
             os.unlink(tf.name)
-        except Exception:
-            pass
+        except OSError as e:
+            logger.debug("Could not remove temp file %s: %s", tf.name, e)
         run.log_artifact(artifact)
         # Version is assigned by W&B (v0, v1, ...)
         return artifact.version

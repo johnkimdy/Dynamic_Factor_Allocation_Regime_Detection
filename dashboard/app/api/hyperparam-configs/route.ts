@@ -35,9 +35,10 @@ export async function GET(request: NextRequest) {
       headers: { "Content-Type": "application/json" },
     });
   } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
+    const isNotFound = e instanceof Error && "code" in e && (e as NodeJS.ErrnoException).code === "ENOENT";
+    const message = isNotFound ? "Config not found" : "Failed to read config";
     return new Response(JSON.stringify({ error: message }), {
-      status: 500,
+      status: isNotFound ? 404 : 500,
       headers: { "Content-Type": "application/json" },
     });
   }

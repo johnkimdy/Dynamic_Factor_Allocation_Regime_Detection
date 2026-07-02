@@ -2,11 +2,17 @@ import { spawn } from "child_process";
 import path from "path";
 import { NextRequest } from "next/server";
 
-/** Allow train API only when running locally (admin). Set ALLOW_TRAIN_API=true to bypass host check. */
+/** Allow train API only when running locally (admin). */
 function isTrainAllowed(request: NextRequest): boolean {
-  if (process.env.ALLOW_TRAIN_API === "true") return true;
   const host = request.headers.get("host") ?? "";
   return host.startsWith("localhost:") || host.startsWith("127.0.0.1:");
+}
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Validate that a string is a YYYY-MM-DD date. */
+function isValidDate(s: string): boolean {
+  return DATE_RE.test(s) && !isNaN(new Date(s).getTime());
 }
 
 /**
@@ -55,6 +61,36 @@ export async function POST(request: NextRequest) {
       { status: 400, headers: { "Content-Type": "application/json" } }
     );
   }
+  if (!isValidDate(train_start) || !isValidDate(train_end)) {
+    return new Response(
+      JSON.stringify({ error: "train_start and train_end must be YYYY-MM-DD" }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
+  if (oos_start && !isValidDate(oos_start)) {
+    return new Response(
+      JSON.stringify({ error: "oos_start must be YYYY-MM-DD" }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
+  if (oos_end && !isValidDate(oos_end)) {
+    return new Response(
+      JSON.stringify({ error: "oos_end must be YYYY-MM-DD" }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
+  if (typeof jump_penalty !== "number" || jump_penalty < 1 || jump_penalty > 500) {
+    return new Response(
+      JSON.stringify({ error: "jump_penalty must be a number between 1 and 500" }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
+  if (typeof sparsity_param !== "number" || sparsity_param < 0.1 || sparsity_param > 100) {
+    return new Response(
+      JSON.stringify({ error: "sparsity_param must be a number between 0.1 and 100" }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
 
   const projectRoot = path.resolve(process.cwd(), "..");
   const scriptPath = path.join(projectRoot, "scripts", "run_training_stream.py");
@@ -71,7 +107,16 @@ export async function POST(request: NextRequest) {
   ];
   if (oos_start) args.push("--oos-start", oos_start);
   if (oos_end) args.push("--oos-end", oos_end);
-  if (config_path) args.push("--config", path.join(projectRoot, config_path));
+  if (config_path) {
+    const safeName = path.basename(config_path);
+    if (!safeName.endsWith(".json")) {
+      return new Response(
+        JSON.stringify({ error: "config_path must be a .json file" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    args.push("--config", path.join(projectRoot, "hyperparam", safeName));
+  }
   if (log_mlflow) args.push("--mlflow");
 
   const encoder = new TextEncoder();

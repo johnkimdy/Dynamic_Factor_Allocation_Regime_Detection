@@ -39,8 +39,8 @@ def open_in_browser():
     url = f"file://{HTML_PATH.resolve()}"
     try:
         webbrowser.open(url)
-    except Exception:
-        pass
+    except (OSError, webbrowser.Error) as e:
+        print(f"Could not open browser automatically: {e}")
     print("=" * 60)
     print("PDF 저장 방법:")
     print("1. 브라우저가 열리면 Cmd+P (Mac) 또는 Ctrl+P (Win) 누르기")

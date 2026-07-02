@@ -166,8 +166,11 @@ def save_run(
                     is_new_best = True
                     with open(best_path, "w") as f:
                         f.write(os.path.basename(path))
-            except Exception as e:
-                logger.warning("Could not read previous best: %s", e)
+            except (json.JSONDecodeError, OSError) as e:
+                logger.warning("Could not read previous best %s: %s", prev_best_file, e)
+                is_new_best = True
+                with open(best_path, "w") as f:
+                    f.write(os.path.basename(path))
         else:
             is_new_best = True
             with open(best_path, "w") as f:
@@ -218,7 +221,7 @@ def load_run(path):
         results = doc.get("results", {})
         cfg = _results_to_sjm_config(results)
         return cfg, doc
-    except Exception as e:
+    except (json.JSONDecodeError, OSError, KeyError) as e:
         logger.warning("Could not load %s: %s", path, e)
         return None, None
 
@@ -261,7 +264,7 @@ def _load_legacy_csv():
                 "sparsity_param": float(df.loc[factor, "kappa_sq"]),
             }
         return cfg
-    except Exception as e:
+    except (OSError, KeyError, ValueError) as e:
         logger.warning("Could not load legacy CSV %s: %s", path, e)
         return None
 
@@ -359,6 +362,6 @@ def load_results_for_store():
                 "sharpe": float(df.loc[f, "sharpe"]) if "sharpe" in df.columns else 0.0}
             for f in df.index
         }
-    except Exception as e:
+    except (OSError, KeyError, ValueError) as e:
         logger.warning("Could not load legacy CSV: %s", e)
         return None

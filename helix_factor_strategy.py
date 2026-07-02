@@ -305,8 +305,8 @@ class SparseJumpModel:
             if on_iteration_callback is not None:
                 try:
                     on_iteration_callback(iteration, float(current_objective))
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("on_iteration_callback failed: %s", e)
 
             if iteration >= self.min_iter and abs(prev_objective - current_objective) < self.tol:
                 self.converged_ = True
@@ -995,11 +995,10 @@ class HelixFactorStrategy:
         fetch_start = start_date
         if use_walk_forward:
             try:
-                from datetime import datetime, timedelta
                 d = pd.Timestamp(start_date) - pd.Timedelta(days=504)
                 fetch_start = d.strftime("%Y-%m-%d")
-            except Exception:
-                pass
+            except (ValueError, TypeError) as e:
+                logger.warning("Could not compute walk-forward fetch start from %s: %s", start_date, e)
         data = self.fetch_data(fetch_start, end_date)
         returns = self.calculate_returns()
         active_returns = compute_active_returns(returns, market_col=MARKET_ETF)
@@ -1118,8 +1117,10 @@ if __name__ == "__main__":
         sjm_config = load(source="local", version_or_alias="production")
         if not sjm_config:
             sjm_config = load(source="local", version_or_alias="latest")
-    except Exception:
-        pass
+    except (ImportError, FileNotFoundError) as e:
+        logger.info("Param store not available, using paper defaults: %s", e)
+    except Exception as e:
+        logger.warning("Unexpected error loading params, using paper defaults: %s", e)
 
     # Run backtest through latest available data
     end_date = pd.Timestamp.now().strftime('%Y-%m-%d')

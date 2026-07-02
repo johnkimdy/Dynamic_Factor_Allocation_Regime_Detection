@@ -79,8 +79,11 @@ def load_prod_params(source="local", version="production"):
 
     try:
         return load(source=source, version_or_alias=version)
+    except (FileNotFoundError, ValueError) as e:
+        logger.info("No params found at %s:%s: %s", source, version, e)
+        return None
     except Exception as e:
-        logger.warning("Could not load params from %s:%s: %s", source, version, e)
+        logger.warning("Could not load params from %s:%s: %s", source, version, e, exc_info=True)
         return None
 
 

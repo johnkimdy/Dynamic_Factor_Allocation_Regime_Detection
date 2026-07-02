@@ -19,7 +19,6 @@ key = (os.environ.get("FRED_API_KEY") or "").strip()
 print(f"\nFRED_API_KEY in env: {'yes' if key else 'no'}")
 if key:
     print(f"  Length: {len(key)} chars")
-    print(f"  First 4 chars: {key[:4]}...")
 
 try:
     from fredapi import Fred

@@ -23,9 +23,9 @@ if (configIdx !== -1 && rest[configIdx + 1]) {
 }
 
 const env = { ...process.env, NEXT_PUBLIC_BACKTEST_JSON: backtestJson };
-const child = spawn("next", [command, ...rest], {
+const nextBin = require.resolve("next/dist/bin/next");
+const child = spawn(process.execPath, [nextBin, command, ...rest], {
   stdio: "inherit",
-  shell: true,
   env,
 });
 
